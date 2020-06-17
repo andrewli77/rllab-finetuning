@@ -221,10 +221,10 @@ class GatherEnv(ProxyEnv, Serializable):
                 size="0.5 %d.5 1" % walldist))
         # _, file_path = tempfile.mkstemp(text=True) #todo: note that this is different from snn4hrl default
         if 'param_name' in kwargs.keys():  # added because of ec2 empty xml issue
-            file_path = osp.join(config.PROJECT_PATH, "sandbox/snn4hrl/envs/mujoco/gather/mujoco_models/" +
+            file_path = osp.join(config.PROJECT_PATH, "sandbox/finetuning/envs/mujoco/gather/mujoco_models/" +
                                  model_cls.FILE.split(".")[0] + "_" + kwargs['param_name'] +"_gather.xml")
         else:
-            file_path = osp.join(config.PROJECT_PATH, "sandbox/snn4hrl/envs/mujoco/gather/mujoco_models/" + model_cls.FILE.split(".")[0] + "_gather.xml")
+            file_path = osp.join(config.PROJECT_PATH, "sandbox/finetuning/envs/mujoco/gather/mujoco_models/" + model_cls.FILE.split(".")[0] + "_gather.xml")
         if not osp.exists(file_path):  # create file if not there
             with open(file_path, 'w+'):
                 pass

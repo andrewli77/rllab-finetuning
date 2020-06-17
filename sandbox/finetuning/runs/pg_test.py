@@ -398,7 +398,7 @@ elif args.env_name in {'antlowgeargather', 'antnormalgeargather', 'antlowgeargat
     if args.random_init or args.pkl_path:
         snn_pkl_path = None
         manager_pkl_path = None
-    n_parallel = 8
+    n_parallel = 32
     latent_dim = 6
     batch_size = 5e5
     max_path_length = 5e3
@@ -447,6 +447,7 @@ if args.test:
     batch_size = batch_size//40
     n_parallel = 1
 exp_prefix, algo = None, None
+print("N_PARALLEL:", n_parallel)
 if algo_name == 'vpg':
     exp_prefix = args.env_name + "_vpg_larger"
     if args.test:
