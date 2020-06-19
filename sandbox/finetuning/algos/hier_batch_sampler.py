@@ -27,6 +27,8 @@ class HierBatchSampler(BaseSampler):
 
     def obtain_samples(self, itr):
         cur_params = self.algo.policy.get_param_values()
+        print("Max_samples:", self.algo.batch_size)
+        print("Max_path_length:", self.algo.max_path_length)
         raw_paths = parallel_sampler.sample_paths(
             policy_params=cur_params,
             max_samples=self.algo.batch_size,

@@ -398,7 +398,7 @@ elif args.env_name in {'antlowgeargather', 'antnormalgeargather', 'antlowgeargat
     if args.random_init or args.pkl_path:
         snn_pkl_path = None
         manager_pkl_path = None
-    n_parallel = 32
+    n_parallel = 1
     latent_dim = 6
     batch_size = 5e5
     max_path_length = 5e3

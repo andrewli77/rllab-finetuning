@@ -14,7 +14,7 @@ from rllab.optimizers.first_order_optimizer import FirstOrderOptimizer
 from rllab.distributions.diagonal_gaussian import DiagonalGaussian
 from rllab.baselines.linear_feature_baseline import LinearFeatureBaseline
 from rllab.baselines.gaussian_mlp_baseline import GaussianMLPBaseline
-
+import lasagne.updates 
 
 class Concurrent_PPO(BatchPolopt):
     """
@@ -151,13 +151,72 @@ class Concurrent_PPO(BatchPolopt):
             target=self.policy,
             inputs=input_list
         )
+
         return dict()
+
+    def log_likelihood_loss_low_sym(self, input_list):
+        #input_list = [obs_var_raw, action_var, latent_var]
+
+        obs_var_raw = input_list[0]  #= ext.new_tensor('obs', ndim=3, dtype=theano.config.floatX)  # todo: check the dtype
+
+        action_var = input_list[1]
+
+        latent_var = input_list[2]
+
+        obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
+
+        dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
+        log_probs = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
+        # todo: verify that dist_info_vars is in order
+
+        low_ll_loss = TT.mean(log_probs)
+
+        return low_ll_loss 
+
+        #self.grad_likelihood_info_low = (low_ll_loss, input_list)
+
+
+
+    def grad_log_likelihood_low(self, inputs):
+        grad_sym = TT.grad(self.log_likelihood_loss_low_sym(inputs), self.policy.low_policy.get_params(trainable=True))
+        #grad_fn = theano.function([], grad_sym)
+        return grad_sym #grad_fn()
+
+    def first_order_grad_low(self, ll_inputs, adv_var):
+        # input_list = [obs_var_raw, action_var, latent_var]
+        obs_var_raw = ll_inputs[0]
+        action_var = ll_inputs[1]
+        latent_var = ll_inputs[2]
+
+        T = adv_var.shape[0]
+
+        grad = 0
+
+        for t in range(1): #(T):
+            obs_t = obs_var_raw[t].reshape(1, obs_var_raw.shape[1], obs_var_raw.shape[2])
+            action_t = action_var[t].reshape(1, action_var.shape[1])
+            latent_t = latent_var[t].reshape(1, latent_var.shape[1])
+
+            grad += adv_var[t] * self.grad_log_likelihood_low((obs_t, action_t, latent_t))
+
+        print(self.log_likelihood_loss_low_sym(input_values_low).eval())
+    
+
+        ## Recall lasagne updates with the negative gradient 
+        updates = lasagne.updates.sgd(grad, self.policy.low_policy.get_params(trainable=True), 0.1)
+        train_fn = theano.function([],updates = updates)
+        train_fn()
+        print(self.log_likelihood_loss_low_sym(input_values_low).eval())
+
+        return grad
+
+
 
     # do the optimization
     def optimize_policy(self, itr, samples_data):
+        #KEYS:  dict_keys(['observations', 'actions', 'rewards', 'returns', 'advantages', 'env_infos', 'agent_infos', 'paths', 'skill_advantages'])
         print(len(samples_data['observations']), self.period)
         assert len(samples_data['observations']) % self.period == 0
-
         # note that I have to do extra preprocessing to the advantages, and also create obs_var_sparse
 
         if self.use_skill_dependent_baseline:
@@ -167,8 +226,10 @@ class Concurrent_PPO(BatchPolopt):
             input_values = tuple(ext.extract(
                 samples_data, "observations", "actions", "advantages", "agent_infos"))
 
+
         obs_raw = input_values[0].reshape(input_values[0].shape[0] // self.period, self.period,
                                           input_values[0].shape[1])
+
 
         obs_sparse = input_values[0].take([i for i in range(0, input_values[0].shape[0], self.period)], axis=0)
         advantage_sparse = input_values[2].reshape([input_values[2].shape[0] // self.period, self.period])[:, 0]
@@ -192,6 +253,23 @@ class Concurrent_PPO(BatchPolopt):
             assert (not self.freeze_manager) or (not self.freeze_skills)
             all_input_values = (obs_raw, obs_sparse, input_values[1], advantage_var, advantage_sparse, latents,
                             latents_sparse, mean, log_std, prob)
+
+        input_values_low = (obs_raw, input_values[1], latents)
+        
+
+        print("HERE")
+        print(self.first_order_grad_low(input_values_low, advantage_var))
+
+        # print(self.log_likelihood_loss_low_sym(input_values_low).eval())
+        
+        # grad_sym = self.grad_log_likelihood_low(input_values_low)
+
+        # ## Recall lasagne updates with the negative gradient 
+        # updates = lasagne.updates.sgd(grad, self.policy.low_policy.get_params(trainable=True), 0.1)
+        # train_fn = theano.function([],updates = updates)
+        # train_fn()
+        # print(self.log_likelihood_loss_low_sym(input_values_low).eval())
+
 
         # todo: assign current parameters to old policy; does this work?
         # old_param_values = self.policy.get_param_values(trainable=True)
