@@ -323,20 +323,6 @@ class Concurrent_PPO(BatchPolopt):
             if t % 5000 == 0:
                 disc = 1.
 
-        input_values_low = (obs_raw, input_values[1], latents, advantage_var)
-        input_values_hi = (obs_sparse, latents_sparse, advantage_sparse)
-        input_values_hi_lo = (obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse)
-
-        # print(self.log_likelihood_loss_low_sym(input_values_low).eval())
-        
-        # grad_sym = self.grad_log_likelihood_low(input_values_low)
-
-        # ## Recall lasagne updates with the negative gradient 
-        # updates = lasagne.updates.sgd(grad, self.policy.low_policy.get_params(trainable=True), 0.1)
-        # train_fn = theano.function([],updates = updates)
-        # train_fn()
-        # print(self.log_likelihood_loss_low_sym(input_values_low).eval())
-
 
         # todo: assign current parameters to old policy; does this work?
         # old_param_values = self.policy.get_param_values(trainable=True)
@@ -348,16 +334,32 @@ class Concurrent_PPO(BatchPolopt):
         self.optimizer.optimize(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
 
-        # second_order_grad_hi = theano.function([], self.second_order_grad_hi_lo(input_values_hi_lo, input_values_low))
-        # g_hi = second_order_grad_hi()
+        ### Second order gradient corrections
+        assert(obs_raw.shape[0] % 5000 == 0)
+        bs = obs_raw.shape[0] // 5000 
 
-        # second_order_grad_lo = theano.function([], self.second_order_grad_lo_hi(input_values_hi_lo, input_values_hi))
-        # g_lo = second_order_grad_lo()
+        for b in range(bs):
+            start = 5000 * b
+            end = 5000 * (b+1)
+            input_values_low = (obs_raw[start:end,:,:] , input_values[1][start:end,:], latents[start:end,:], advantage_var[start:end])
+            input_values_hi = (obs_sparse[start:end,:], latents_sparse[start:end,:], advantage_sparse[start:end])
+            input_values_hi_lo = (obs_raw[start:end,:,:], input_values[1][start:end,:], latents[start:end,:], disc_rewards[start:end], obs_sparse[start:end,:], latents_sparse[start:end,:])
 
-        # updates = lasagne.updates.sgd(g_hi, self.policy.manager.get_params(trainable=True), 0.1)
-        # updates = lasagne.updates.sgd(g_lo, self.policy.low_policy.get_params(trainable=True), 0.1)
-        # train_fn = theano.function([],updates = updates)
-        # train_fn()
+            second_order_grad_hi = theano.function([], self.second_order_grad_hi_lo(input_values_hi_lo, input_values_low))
+            g_hi = second_order_grad_hi()
+
+            second_order_grad_lo = theano.function([], self.second_order_grad_lo_hi(input_values_hi_lo, input_values_hi))
+            g_lo = second_order_grad_lo()
+
+            updates_1 = lasagne.updates.sgd(g_hi, self.policy.manager.get_params(trainable=True), 0.1)
+            updates_2 = lasagne.updates.sgd(g_lo, self.policy.low_policy.get_params(trainable=True), 0.1)
+            train_fn_1 = theano.function([],updates = updates_1)
+            train_fn_2 = theano.function([],updates = updates_2)
+            print("Loss: ", self.optimizer.loss(all_input_values))
+            train_fn_1()
+            print("Loss: ", self.optimizer.loss(all_input_values))
+            train_fn_2()
+            print("Loss: ", self.optimizer.loss(all_input_values))
 
 
         logger.record_tabular('LossBefore', loss_before)
