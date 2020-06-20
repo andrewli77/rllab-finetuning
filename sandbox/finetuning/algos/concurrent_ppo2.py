@@ -353,8 +353,8 @@ class Concurrent_PPO(BatchPolopt):
             second_order_grad_lo = theano.function([], self.second_order_grad_lo_hi(input_values_hi_lo, input_values_hi))
             g_lo = second_order_grad_lo()
 
-            updates_1 = lasagne.updates.sgd(g_hi, self.policy.manager.get_params(trainable=True), 0.001)
-            updates_2 = lasagne.updates.sgd(g_lo, self.policy.low_policy.get_params(trainable=True), 0.001)
+            updates_1 = lasagne.updates.sgd(g_hi, self.policy.manager.get_params(trainable=True), 0.003)
+            updates_2 = lasagne.updates.sgd(g_lo, self.policy.low_policy.get_params(trainable=True), 0.003)
             train_fn_1 = theano.function([],updates = updates_1)
             train_fn_2 = theano.function([],updates = updates_2)
             #print("Loss: ", self.optimizer.loss(all_input_values))
