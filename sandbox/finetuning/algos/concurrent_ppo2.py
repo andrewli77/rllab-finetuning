@@ -154,8 +154,9 @@ class Concurrent_PPO(BatchPolopt):
 
         return dict()
 
-    def log_likelihood_loss_low_sym(self, input_list):
-        #input_list = [obs_var_raw, action_var, latent_var]
+    # Returns d(theta_lo)[R]
+    def first_order_grad_lo(self, input_list):
+        #input_list = [obs_var_raw, action_var, latent_var, advantage_var]
 
         obs_var_raw = input_list[0]  #= ext.new_tensor('obs', ndim=3, dtype=theano.config.floatX)  # todo: check the dtype
 
@@ -163,53 +164,113 @@ class Concurrent_PPO(BatchPolopt):
 
         latent_var = input_list[2]
 
+        advantage_var = input_list[3]
+
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
 
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
         # todo: verify that dist_info_vars is in order
 
-        low_ll_loss = TT.mean(log_probs)
+        low_surrogate_loss = TT.mean(log_probs * advantage_var)
 
-        return low_ll_loss 
+        return theano.grad(low_surrogate_loss, self.policy.low_policy.get_params(trainable=True))
 
         #self.grad_likelihood_info_low = (low_ll_loss, input_list)
 
+    # Returns d(theta_hi)[R]
+    def first_order_grad_hi(self, input_list):
+        obs_var_sparse = input_list[0]
 
+        latent_var_sparse = input_list[1]
 
-    def grad_log_likelihood_low(self, inputs):
-        grad_sym = TT.grad(self.log_likelihood_loss_low_sym(inputs), self.policy.low_policy.get_params(trainable=True))
-        #grad_fn = theano.function([], grad_sym)
-        return grad_sym #grad_fn()
+        advantage_var_sparse = input_list[2] 
 
-    def first_order_grad_low(self, ll_inputs, adv_var):
-        # input_list = [obs_var_raw, action_var, latent_var]
-        obs_var_raw = ll_inputs[0]
-        action_var = ll_inputs[1]
-        latent_var = ll_inputs[2]
+        latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
+        actual_latent_probs = TT.sum(latent_probs * latent_var_sparse, axis=1)
+        manager_surr_loss = - TT.mean(TT.log(actual_latent_probs) * advantage_var_sparse)
 
-        T = adv_var.shape[0]
+        return theano.grad(manager_surr_loss, self.policy.manager.get_params())
 
-        grad = 0
+    # d(theta_hi) d(theta_lo)[R]
+    # The final gradient has the shape of theta_hi 
+    def second_order_grad_hi_lo(self, input_list, input_list_lo):
 
-        for t in range(1): #(T):
-            obs_t = obs_var_raw[t].reshape(1, obs_var_raw.shape[1], obs_var_raw.shape[2])
-            action_t = action_var[t].reshape(1, action_var.shape[1])
-            latent_t = latent_var[t].reshape(1, latent_var.shape[1])
+        obs_var_raw = input_list[0]  #= ext.new_tensor('obs', ndim=3, dtype=theano.config.floatX)  # todo: check the dtype
 
-            grad += adv_var[t] * self.grad_log_likelihood_low((obs_t, action_t, latent_t))
+        action_var = input_list[1]
 
-        print(self.log_likelihood_loss_low_sym(input_values_low).eval())
-    
+        latent_var = input_list[2]
 
-        ## Recall lasagne updates with the negative gradient 
-        updates = lasagne.updates.sgd(grad, self.policy.low_policy.get_params(trainable=True), 0.1)
-        train_fn = theano.function([],updates = updates)
-        train_fn()
-        print(self.log_likelihood_loss_low_sym(input_values_low).eval())
+        disc_rewards_var = input_list[3]
 
-        return grad
+        obs_var_sparse = input_list[4]
 
+        latent_var_sparse = input_list[5]
+
+        obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
+
+        ## Computing the cumulative likelihood for low policy
+        dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
+        log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
+        cum_log_probs_low = TT.cumsum(log_probs_low)
+
+        ## Computing the cumulative likelihood for high policy
+
+        latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
+        actual_latent_probs = TT.sum(latent_probs * latent_var_sparse, axis=1)
+
+        cum_latent_probs = TT.cumsum(actual_latent_probs)
+
+        surrogate_loss = TT.mean(disc_rewards_var * cum_log_probs_low * cum_latent_probs)
+
+        fo_grad_lo = self.first_order_grad_lo(input_list_lo)
+
+        grad_lo = theano.grad(surrogate_loss, self.policy.low_policy.get_params())
+        # Final result is grad_lo(R)^T * grad_hi (grad_low (R))
+        # Compute this result in one step with Lop
+
+        return theano.Lop(grad_lo, self.policy.manager.get_params(), fo_grad_lo)
+
+    # d(theta_lo) d(theta_hi)[R]
+    # The final gradient has the shape of theta_lo
+    def second_order_grad_lo_hi(self, input_list, input_list_hi):
+
+        obs_var_raw = input_list[0]  #= ext.new_tensor('obs', ndim=3, dtype=theano.config.floatX)  # todo: check the dtype
+
+        action_var = input_list[1]
+
+        latent_var = input_list[2]
+
+        disc_rewards_var = input_list[3]
+
+        obs_var_sparse = input_list[4]
+
+        latent_var_sparse = input_list[5]
+
+        obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
+
+        ## Computing the cumulative likelihood for low policy
+        dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
+        log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
+        cum_log_probs_low = TT.cumsum(log_probs_low)
+
+        ## Computing the cumulative likelihood for high policy
+
+        latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
+        actual_latent_probs = TT.sum(latent_probs * latent_var_sparse, axis=1)
+
+        cum_latent_probs = TT.cumsum(actual_latent_probs)
+
+        surrogate_loss = TT.mean(disc_rewards_var * cum_log_probs_low * cum_latent_probs)
+
+        fo_grad_hi = self.first_order_grad_hi(input_list_hi)
+
+        grad_hi = theano.grad(surrogate_loss, self.policy.manager.get_params())
+        # Final result is grad_lo(R)^T * grad_hi (grad_low (R))
+        # Compute this result in one step with Lop
+
+        return theano.Lop(grad_hi, self.policy.low_policy.get_params(), fo_grad_hi)
 
 
     # do the optimization
@@ -221,15 +282,13 @@ class Concurrent_PPO(BatchPolopt):
 
         if self.use_skill_dependent_baseline:
             input_values = tuple(ext.extract(
-                samples_data, "observations", "actions", "advantages", "agent_infos", "skill_advantages"))
+                samples_data, "observations", "actions", "advantages", "agent_infos", "rewards", "skill_advantages",))
         else:
             input_values = tuple(ext.extract(
-                samples_data, "observations", "actions", "advantages", "agent_infos"))
-
+                samples_data, "observations", "actions", "advantages", "agent_infos", "rewards"))
 
         obs_raw = input_values[0].reshape(input_values[0].shape[0] // self.period, self.period,
                                           input_values[0].shape[1])
-
 
         obs_sparse = input_values[0].take([i for i in range(0, input_values[0].shape[0], self.period)], axis=0)
         advantage_sparse = input_values[2].reshape([input_values[2].shape[0] // self.period, self.period])[:, 0]
@@ -241,7 +300,7 @@ class Concurrent_PPO(BatchPolopt):
             list(input_values[3]['prob'].take([i for i in range(0, latents.shape[0], self.period)], axis=0)),
             dtype=np.float32)
         if self.use_skill_dependent_baseline:
-            advantage_var = input_values[4]
+            advantage_var = input_values[5]
         else:
             advantage_var = input_values[2]
         # import ipdb; ipdb.set_trace()
@@ -254,11 +313,19 @@ class Concurrent_PPO(BatchPolopt):
             all_input_values = (obs_raw, obs_sparse, input_values[1], advantage_var, advantage_sparse, latents,
                             latents_sparse, mean, log_std, prob)
 
-        input_values_low = (obs_raw, input_values[1], latents)
-        
 
-        print("HERE")
-        print(self.first_order_grad_low(input_values_low, advantage_var))
+        disc_rewards = input_values[4]
+        disc = 1. 
+        for t in range(len(disc_rewards)):
+            disc_rewards[t] *= disc
+            disc *= 0.999
+
+            if t % 5000 == 0:
+                disc = 1.
+
+        input_values_low = (obs_raw, input_values[1], latents, advantage_var)
+        input_values_hi = (obs_sparse, latents_sparse, advantage_sparse)
+        input_values_hi_lo = (obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse)
 
         # print(self.log_likelihood_loss_low_sym(input_values_low).eval())
         
@@ -280,6 +347,19 @@ class Concurrent_PPO(BatchPolopt):
         loss_before = self.optimizer.loss(all_input_values)
         self.optimizer.optimize(all_input_values)
         loss_after = self.optimizer.loss(all_input_values)
+
+        # second_order_grad_hi = theano.function([], self.second_order_grad_hi_lo(input_values_hi_lo, input_values_low))
+        # g_hi = second_order_grad_hi()
+
+        # second_order_grad_lo = theano.function([], self.second_order_grad_lo_hi(input_values_hi_lo, input_values_hi))
+        # g_lo = second_order_grad_lo()
+
+        # updates = lasagne.updates.sgd(g_hi, self.policy.manager.get_params(trainable=True), 0.1)
+        # updates = lasagne.updates.sgd(g_lo, self.policy.low_policy.get_params(trainable=True), 0.1)
+        # train_fn = theano.function([],updates = updates)
+        # train_fn()
+
+
         logger.record_tabular('LossBefore', loss_before)
         logger.record_tabular('LossAfter', loss_after)
         logger.record_tabular('dLoss', loss_before - loss_after)
