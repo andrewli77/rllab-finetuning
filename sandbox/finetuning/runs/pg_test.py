@@ -398,7 +398,7 @@ elif args.env_name in {'antlowgeargather', 'antnormalgeargather', 'antlowgeargat
     if args.random_init or args.pkl_path:
         snn_pkl_path = None
         manager_pkl_path = None
-    n_parallel = 32
+    n_parallel = 1
     latent_dim = 6
     batch_size = 5e5
     max_path_length = 5e3
@@ -588,7 +588,8 @@ elif algo_name == "ppo" or algo_name == "hippo" or algo_name == "hippo_random_p"
             mlp_skill_dependent_baseline=args.mlp_skill_baseline,
             freeze_manager= args.fixed_manager,
             freeze_skills = not trainable_snn,
-            step_size=learning_rate
+            step_size=learning_rate,
+            whole_paths=False
         )
 
         if args.pkl_base_dir is None:
