@@ -200,20 +200,22 @@ class Concurrent_PPO(BatchPolopt):
     # The final gradient has the shape of theta_hi 
     def second_order_grad_hi_lo_init(self, obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse):
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
+        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // 5000, 5000])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        cum_log_probs_low = TT.cumsum(log_probs_low)
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // 5000, 5000])
+        cum_log_probs_low_batched = TT.cumsum(log_probs_low_batched, axis=1)
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.sum(latent_probs * latent_var_sparse, axis=1)
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // 5000, 5000])
+        cum_latent_probs_batched = TT.cumsum(actual_latent_probs_batched, axis=1)
 
-        cum_latent_probs = TT.cumsum(actual_latent_probs)
-
-        surrogate_loss = TT.mean(disc_rewards_var * cum_log_probs_low * cum_latent_probs)
+        surrogate_loss = TT.mean(disc_rewards_var_batched * cum_log_probs_low_batched * cum_latent_probs_batched)
 
         fo_grad_lo = self.first_order_grad_lo
 
@@ -227,20 +229,22 @@ class Concurrent_PPO(BatchPolopt):
     # The final gradient has the shape of theta_lo
     def second_order_grad_lo_hi_init(self, obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse):
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
+        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // 5000, 5000])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        cum_log_probs_low = TT.cumsum(log_probs_low)
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // 5000, 5000])
+        cum_log_probs_low_batched = TT.cumsum(log_probs_low_batched, axis=1)
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.sum(latent_probs * latent_var_sparse, axis=1)
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // 5000, 5000])
+        cum_latent_probs_batched = TT.cumsum(actual_latent_probs_batched, axis=1)
 
-        cum_latent_probs = TT.cumsum(actual_latent_probs)
-
-        surrogate_loss = TT.mean(disc_rewards_var * cum_log_probs_low * cum_latent_probs)
+        surrogate_loss = TT.mean(disc_rewards_var_batched * cum_log_probs_low_batched * cum_latent_probs_batched)
 
         fo_grad_hi = self.first_order_grad_hi
 
@@ -321,8 +325,8 @@ class Concurrent_PPO(BatchPolopt):
             start = 5000 * b
             end = 5000 * (b+1)
 
-            self.train_fn_1(obs_raw[start:end,:,:], input_values[1][start:end,:], latents[start:end,:], disc_rewards[start:end], obs_sparse[start:end,:], latents_sparse[start:end,:], advantage_var[start:end])
-            self.train_fn_2(obs_raw[start:end,:,:], input_values[1][start:end,:], latents[start:end,:], disc_rewards[start:end], obs_sparse[start:end,:], latents_sparse[start:end,:], advantage_sparse[start:end])
+            self.train_fn_1(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_var)
+            self.train_fn_2(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_sparse)
 
         print("End")
 
