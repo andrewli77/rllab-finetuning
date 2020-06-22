@@ -318,15 +318,11 @@ class Concurrent_PPO(BatchPolopt):
 
         ### Second order gradient corrections
         assert(obs_raw.shape[0] % 5000 == 0)
-        bs = obs_raw.shape[0] // 5000 
 
         print("Start")
-        for b in range(bs):
-            start = 5000 * b
-            end = 5000 * (b+1)
 
-            self.train_fn_1(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_var)
-            self.train_fn_2(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_sparse)
+        self.train_fn_1(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_var)
+        self.train_fn_2(obs_raw, input_values[1], latents, disc_rewards, obs_sparse, latents_sparse, advantage_sparse)
 
         print("End")
 
