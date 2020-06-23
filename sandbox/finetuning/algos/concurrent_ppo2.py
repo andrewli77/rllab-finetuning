@@ -161,8 +161,8 @@ class Concurrent_PPO(BatchPolopt):
         self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
         self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
 
-        self.hi_lo_magnitude = sum([x.norm(2) for x in self.second_order_grad_hi_lo])
-        self.lo_hi_magnitude = sum([x.norm(2) for x in self.second_order_grad_lo_hi])
+        self.hi_lo_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_hi_lo]) ** 0.5
+        self.lo_hi_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_lo_hi]) ** 0.5 
 
         self.updates_1 = lasagne.updates.adam(self.second_order_grad_hi_lo, self.policy.manager.get_params(trainable=True), learning_rate=0.0001)
         self.updates_2 = lasagne.updates.adam(self.second_order_grad_lo_hi, self.policy.low_policy.get_params(trainable=True), learning_rate=0.0001)
