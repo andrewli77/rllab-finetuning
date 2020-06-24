@@ -164,8 +164,8 @@ class Concurrent_PPO(BatchPolopt):
         self.hi_lo_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_hi_lo]) ** 0.5
         self.lo_hi_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_lo_hi]) ** 0.5 
 
-        self.updates_1 = lasagne.updates.adam(self.second_order_grad_hi_lo, self.policy.manager.get_params(trainable=True), learning_rate=0.0001)
-        self.updates_2 = lasagne.updates.adam(self.second_order_grad_lo_hi, self.policy.low_policy.get_params(trainable=True), learning_rate=0.0001)
+        self.updates_1 = lasagne.updates.adam(self.second_order_grad_hi_lo, self.policy.manager.get_params(trainable=True), learning_rate=0.00001)
+        self.updates_2 = lasagne.updates.adam(self.second_order_grad_lo_hi, self.policy.low_policy.get_params(trainable=True), learning_rate=0.00001)
 
         # Updates params, and outputs the magnitude of the gradient. 
         self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse, advantage_var], updates = self.updates_1, outputs=self.hi_lo_magnitude)
