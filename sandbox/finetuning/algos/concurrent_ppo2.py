@@ -30,6 +30,7 @@ class Concurrent_PPO(BatchPolopt):
                  optimizer=None,
                  optimizer_args=None,
                  step_size=0.003,
+                 step_size_2=0.0000001,
                  num_latents=6,
                  latents=None,  # some sort of iterable of the actual latent vectors
                  period=10,  # how often I choose a latent
@@ -47,6 +48,7 @@ class Concurrent_PPO(BatchPolopt):
                 optimizer_args = dict(batch_size=None)
             self.optimizer = FirstOrderOptimizer(learning_rate=step_size, max_epochs=train_pi_iters, **optimizer_args)
         self.step_size = step_size
+        self.step_size_2 = step_size_2
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.epsilon = epsilon
 
@@ -172,20 +174,20 @@ class Concurrent_PPO(BatchPolopt):
         self.hi_lo_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_hi_lo]) ** 0.5
         self.lo_hi_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_lo_hi]) ** 0.5 
 
-        self.hi_lo_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_hi_lo, 0.3)
-        self.lo_hi_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_lo_hi, 0.1)
+        # self.hi_lo_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_hi_lo, 0.3)
+        # self.lo_hi_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_lo_hi, 0.1)
 
-        self.hi_lo_clipped_magnitude = sum([x.norm(2) ** 2 for x in self.hi_lo_clipped]) ** 0.5
-        self.lo_hi_clipped_magnitude = sum([x.norm(2) ** 2 for x in self.lo_hi_clipped]) ** 0.5
+        # self.hi_lo_clipped_magnitude = sum([x.norm(2) ** 2 for x in self.hi_lo_clipped]) ** 0.5
+        # self.lo_hi_clipped_magnitude = sum([x.norm(2) ** 2 for x in self.lo_hi_clipped]) ** 0.5
 
-        self.updates_1 = lasagne.updates.adam(self.hi_lo_clipped, self.policy.manager.get_params(trainable=True), learning_rate=0.0000001)
-        self.updates_2 = lasagne.updates.adam(self.lo_hi_clipped, self.policy.low_policy.get_params(trainable=True), learning_rate=0.0000001)
+        self.updates_1 = lasagne.updates.adam(self.second_order_grad_hi_lo, self.policy.manager.get_params(trainable=True), learning_rate=self.step_size_2)
+        self.updates_2 = lasagne.updates.adam(self.second_order_grad_lo_hi, self.policy.low_policy.get_params(trainable=True), learning_rate=self.step_size_2)
 
         # Updates params, and outputs the magnitude of the gradient. 
-        self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, advantage_var], updates = self.updates_1, outputs=[self.hi_lo_magnitude, self.hi_lo_clipped_magnitude])
-        self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, advantage_var_sparse],updates = self.updates_2, outputs=[self.lo_hi_magnitude, self.lo_hi_clipped_magnitude])
+        self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, advantage_var], updates = self.updates_1, outputs=self.hi_lo_magnitude)
+        self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, advantage_var_sparse],updates = self.updates_2, outputs=self.lo_hi_magnitude)
 
-        print("INIT HERE")
+        print("INIT HERE", self.step_size_2)
 
         return dict()
 
@@ -379,14 +381,12 @@ class Concurrent_PPO(BatchPolopt):
 
         print("Start")
 
-        mag_1 = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var)
-        mag_2 = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse)
+        if self.step_size_2 != 0:
+            mag_1 = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var)
+            mag_2 = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse)
 
-        logger.record_tabular('Grad_hi_lo_Mag', mag_1[0])
-        logger.record_tabular('Grad_lo_hi_Mag', mag_2[0])
-
-        logger.record_tabular('Grad_hi_lo_Mag_clipped', mag_1[1])
-        logger.record_tabular('Grad_lo_hi_Mag_clipped', mag_2[1])
+            logger.record_tabular('Grad_hi_lo_Mag', mag_1)
+            logger.record_tabular('Grad_lo_hi_Mag', mag_2)
 
         print("End")
 
