@@ -377,7 +377,6 @@ class Concurrent_PPO(BatchPolopt):
         loss_after = self.optimizer.loss(all_input_values)
 
         ### Second order gradient corrections
-        assert(obs_raw.shape[0] % 5000 == 0)
 
         print("Start")
 

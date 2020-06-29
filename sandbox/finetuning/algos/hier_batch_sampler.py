@@ -60,9 +60,9 @@ class HierBatchSampler(BaseSampler):
 
         if self.algo.whole_paths:
             #print("NOT TRUNCATED")
-            assert(self.algo.batch_size % self.algo.max_path_length == 0)
-            max_paths = int(self.algo.batch_size // self.algo.max_path_length)
-            return paths[:max_paths]
+            # assert(self.algo.batch_size % self.algo.max_path_length == 0)
+            # max_paths = int(self.algo.batch_size // self.algo.max_path_length)
+            return paths #[:max_paths]
         else:
             paths_truncated = parallel_sampler.truncate_paths(paths, self.algo.batch_size)
         return paths_truncated
