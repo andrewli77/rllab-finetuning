@@ -596,7 +596,7 @@ elif algo_name == "ppo" or algo_name == "hippo" or algo_name == "hippo_random_p"
             freeze_skills = not trainable_snn,
             step_size=learning_rate,
             step_size_2=learning_rate_2,
-            whole_paths=False
+            whole_paths=True
         )
 
         if args.pkl_base_dir is None:
