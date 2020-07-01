@@ -31,6 +31,7 @@ class Concurrent_PPO(BatchPolopt):
                  optimizer_args=None,
                  step_size=0.003,
                  step_size_2=0.0000001,
+                 version=1,
                  num_latents=6,
                  latents=None,  # some sort of iterable of the actual latent vectors
                  period=10,  # how often I choose a latent
@@ -49,6 +50,7 @@ class Concurrent_PPO(BatchPolopt):
             self.optimizer = FirstOrderOptimizer(learning_rate=step_size, max_epochs=train_pi_iters, **optimizer_args)
         self.step_size = step_size
         self.step_size_2 = step_size_2
+        self.version = version
         self.truncate_local_is_ratio = truncate_local_is_ratio
         self.epsilon = epsilon
 
@@ -159,13 +161,13 @@ class Concurrent_PPO(BatchPolopt):
         # 1: LOLA's gradient estimator
         # 2: simple advantage estimator
         # 3: unbiased advantage estimator
-        version = 3
+        print("VERSION: ", self.version)
 
         self.first_order_grad_lo = self.first_order_grad_lo_init(obs_var_raw, action_var, latent_var, advantage_var)
         self.first_order_grad_hi = self.first_order_grad_hi_init(obs_var_sparse, latent_var_sparse, advantage_var_sparse)
 
         # Updates params, and outputs the magnitude of the gradient. 
-        if version == 1:
+        if self.version == 1:
             assert(False) # don't use this
             self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
             self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
@@ -182,22 +184,22 @@ class Concurrent_PPO(BatchPolopt):
 
             self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, disc_rewards_var], updates = self.updates_1, outputs=self.hi_lo_magnitude)
             self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, disc_rewards_var],updates = self.updates_2, outputs=self.lo_hi_magnitude)
-        elif version == 2:
+        elif self.version == 2:
             self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_exp_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
             self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_exp_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
 
             self.hi_lo_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_hi_lo]) ** 0.5
             self.lo_hi_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_lo_hi]) ** 0.5
 
-            self.hi_lo_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_hi_lo, 0.01)
-            self.lo_hi_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_lo_hi, 0.01)
+            self.hi_lo_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_hi_lo, 1)
+            self.lo_hi_clipped = lasagne.updates.total_norm_constraint(self.second_order_grad_lo_hi, 1)
 
             self.updates_1 = lasagne.updates.adam(self.hi_lo_clipped, self.policy.manager.get_params(trainable=True), learning_rate=self.step_size_2)
             self.updates_2 = lasagne.updates.adam(self.lo_hi_clipped, self.policy.low_policy.get_params(trainable=True), learning_rate=self.step_size_2)
 
             self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, advantage_var], updates = self.updates_1, outputs=self.hi_lo_magnitude)
             self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, advantage_var_sparse],updates = self.updates_2, outputs=self.lo_hi_magnitude)
-        elif version == 3:
+        elif self.version == 3:
             self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_third_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
             self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_third_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
                 
@@ -236,7 +238,7 @@ class Concurrent_PPO(BatchPolopt):
     def first_order_grad_hi_init(self, obs_var_sparse, latent_var_sparse, advantage_var_sparse):
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
-        manager_surr_loss = TT.mean(TT.log(actual_latent_probs) * advantage_var_sparse)
+        manager_surr_loss = TT.mean(actual_latent_probs * advantage_var_sparse)
 
         return theano.grad(manager_surr_loss, self.policy.manager.get_params())
 

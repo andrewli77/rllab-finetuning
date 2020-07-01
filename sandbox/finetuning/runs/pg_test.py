@@ -74,6 +74,7 @@ parser.add_argument('--env_name', type=str, default="cartpole")
 parser.add_argument('--algo', type=str, default='ppo')
 parser.add_argument('--learning_rate', '-lr', type=float, default=None)
 parser.add_argument('--learning_rate_2', '-lr2', type=float, default=None)
+parser.add_argument('--version', '-version', type=int, default=1)
 parser.add_argument('--batch_size', '-bs', type=int, default=-1)
 parser.add_argument('--n_itr', '-n_itr', type=int, default=-1)
 parser.add_argument('--discount', '-d', type=float, default=None)
@@ -414,6 +415,9 @@ elif args.env_name in {'antlowgeargather', 'antnormalgeargather', 'antlowgeargat
         learning_rate_2 = 0.0000001
     else:
         learning_rate_2 = args.learning_rate_2
+
+    version = args.version
+
     if args.period != -1:
         period = args.period
     else:
@@ -596,6 +600,7 @@ elif algo_name == "ppo" or algo_name == "hippo" or algo_name == "hippo_random_p"
             freeze_skills = not trainable_snn,
             step_size=learning_rate,
             step_size_2=learning_rate_2,
+            version=version,
             whole_paths=True
         )
 
