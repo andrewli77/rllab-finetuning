@@ -330,7 +330,7 @@ elif args.env_name in {'swimmergather', 'swimmergatherhfield', 'swimmergatherrev
     if args.random_init or args.pkl_base_dir:
         snn_pkl_path = None
         manager_pkl_path = None
-    n_parallel = 8
+    n_parallel = 20
     latent_dim = 6
     batch_size = 5e5
     n_itr = 500
@@ -339,6 +339,11 @@ elif args.env_name in {'swimmergather', 'swimmergatherhfield', 'swimmergatherrev
         learning_rate = 0.003
     else:
         learning_rate = args.learning_rate
+
+    if args.learning_rate_2 is None:
+        learning_rate_2 = 0.0000001
+    else:
+        learning_rate_2 = args.learning_rate_2
     if args.period != -1:
         period = args.period
     else:
