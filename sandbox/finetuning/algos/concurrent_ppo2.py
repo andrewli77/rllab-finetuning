@@ -245,20 +245,21 @@ class Concurrent_PPO(BatchPolopt):
     # d(theta_hi) d(theta_lo)[R]
     # The final gradient has the shape of theta_hi 
     def second_order_grad_hi_lo_init(self, obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse):
+        max_path_length = int(self.max_path_length)
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
-        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // self.max_path_length, self.max_path_length])
+        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // max_path_length, max_path_length])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // self.max_path_length, self.max_path_length])
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // max_path_length, max_path_length])
         cum_log_probs_low_batched = TT.cumsum(log_probs_low_batched, axis=1)
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
-        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // self.max_path_length, self.max_path_length])
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // max_path_length, max_path_length])
         cum_latent_probs_batched = TT.cumsum(actual_latent_probs_batched, axis=1)
 
         surrogate_loss = TT.mean(disc_rewards_var_batched * cum_log_probs_low_batched * cum_latent_probs_batched)
@@ -274,20 +275,21 @@ class Concurrent_PPO(BatchPolopt):
     # d(theta_lo) d(theta_hi)[R]
     # The final gradient has the shape of theta_lo
     def second_order_grad_lo_hi_init(self, obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse):
+        max_path_length = int(self.max_path_length)
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
-        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // self.max_path_length, self.max_path_length])
+        disc_rewards_var_batched = TT.reshape(disc_rewards_var, [disc_rewards_var.shape[0] // max_path_length, max_path_length])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // self.max_path_length, self.max_path_length])
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // max_path_length, max_path_length])
         cum_log_probs_low_batched = TT.cumsum(log_probs_low_batched, axis=1)
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
-        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // self.max_path_length, self.max_path_length])
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // max_path_length, max_path_length])
         cum_latent_probs_batched = TT.cumsum(actual_latent_probs_batched, axis=1)
 
         surrogate_loss = TT.mean(disc_rewards_var_batched * cum_log_probs_low_batched * cum_latent_probs_batched)
@@ -342,19 +344,20 @@ class Concurrent_PPO(BatchPolopt):
         return theano.Lop(grad_hi, self.policy.low_policy.get_params(), fo_grad_hi)
 
     def second_order_grad_hi_lo_third_init(self, obs_var_raw, action_var, latent_var, adv_var, obs_var_sparse, latent_var_sparse):
+        max_path_length = int(self.max_path_length)
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
-        adv_var_batched = TT.reshape(adv_var, [adv_var.shape[0] // self.max_path_length, self.max_path_length])
+        adv_var_batched = TT.reshape(adv_var, [adv_var.shape[0] // max_path_length, max_path_length])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // self.max_path_length, self.max_path_length])
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // max_path_length, max_path_length])
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
-        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // self.max_path_length, self.max_path_length])
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // max_path_length, max_path_length])
         cum_latent_probs_batched = TT.cumsum(actual_latent_probs_batched, axis=1)
 
         surrogate_loss = TT.mean(adv_var_batched * log_probs_low_batched * cum_latent_probs_batched)
@@ -368,20 +371,21 @@ class Concurrent_PPO(BatchPolopt):
         return theano.Lop(grad_lo, self.policy.manager.get_params(), fo_grad_lo)
 
     def second_order_grad_lo_hi_third_init(self, obs_var_raw, action_var, latent_var, adv_var, obs_var_sparse, latent_var_sparse):
+        max_path_length = int(self.max_path_length)
         obs_var = TT.reshape(obs_var_raw, [obs_var_raw.shape[0] * obs_var_raw.shape[1], obs_var_raw.shape[2]])
-        adv_var_batched = TT.reshape(adv_var, [adv_var.shape[0] // self.max_path_length, self.max_path_length])
+        adv_var_batched = TT.reshape(adv_var, [adv_var.shape[0] // max_path_length, max_path_length])
 
         ## Computing the cumulative likelihood for low policy
         dist_info_var = self.policy.low_policy.dist_info_sym(obs_var, state_info_var=latent_var)
         log_probs_low = self.diagonal.log_likelihood_sym(action_var, dist_info_var)
-        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // self.max_path_length, self.max_path_length])
+        log_probs_low_batched = TT.reshape(log_probs_low, [log_probs_low.shape[0] // max_path_length, max_path_length])
         cum_log_probs_low_batched = TT.cumsum(log_probs_low_batched, axis=1)
 
         ## Computing the cumulative likelihood for high policy
 
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
-        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // self.max_path_length, self.max_path_length])
+        actual_latent_probs_batched = TT.reshape(actual_latent_probs, [actual_latent_probs.shape[0] // max_path_length, max_path_length])
 
         surrogate_loss = TT.mean(adv_var_batched * cum_log_probs_low_batched * actual_latent_probs_batched)
         fo_grad_hi = self.first_order_grad_hi
