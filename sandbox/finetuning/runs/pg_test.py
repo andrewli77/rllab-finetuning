@@ -348,6 +348,8 @@ elif args.env_name in {'swimmergather', 'swimmergatherhfield', 'swimmergatherrev
         period = args.period
     else:
         period = 10
+
+    version = args.version 
 elif args.env_name in {'antlowgeargather', 'antnormalgeargather', 'antlowgeargatherreversed', 'antlowgeargatherhfield',
                        'crippledantlowgeargather', 'antlowgeargatherenvcompenalty', 'antlowgeargatherenvjointpenalty',
                        'antbasingather', 'anthalfgravitygather', 'antdisabledgather'}:
