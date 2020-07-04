@@ -235,7 +235,7 @@ class Concurrent_PPO(BatchPolopt):
         #self.grad_likelihood_info_low = (low_ll_loss, input_list)
 
     # Returns d(theta_hi)[R]
-    def first_order_grad_hi_init(self, obs_var_sparse, latent_ddvar_sparse, advantage_var_sparse):
+    def first_order_grad_hi_init(self, obs_var_sparse, latent_var_sparse, advantage_var_sparse):
         latent_probs = self.policy.manager.dist_info_sym(obs_var_sparse)['prob']
         actual_latent_probs = TT.log(TT.sum(latent_probs * latent_var_sparse, axis=1))
         manager_surr_loss = TT.mean(actual_latent_probs * advantage_var_sparse)
