@@ -25,6 +25,12 @@ def pad_tensor(x, max_len, mode='zero'):
         np.tile(padding, (max_len - len(x),) + (1,) * np.ndim(x[0]))
     ])
 
+def pad_tensor_n_collapsed(xs, max_len):
+    ret = np.zeros((len(xs), max_len) + xs[0].shape[1:], dtype=xs[0].dtype)
+    for idx, x in enumerate(xs):
+        ret[idx][:len(x)] = x
+    return ret.reshape((len(xs) * max_len,) + xs[0].shape[1:])
+
 
 def pad_tensor_n(xs, max_len):
     ret = np.zeros((len(xs), max_len) + xs[0].shape[1:], dtype=xs[0].dtype)

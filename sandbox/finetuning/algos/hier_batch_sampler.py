@@ -119,19 +119,23 @@ class HierBatchSampler(BaseSampler):
         )
 
         if not self.algo.policy.recurrent:
-            advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-
 
             if self.algo.center_adv:
-                advantages = util.center_advantages(advantages)
+                raw_adv = np.concatenate([path["advantages"] for path in paths])
+                adv_mean = np.mean(raw_adv)
+                adv_std = np.std(raw_adv) + 1e-8
+                adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
+            else:
+                assert(False)
+                adv = [path["advantages"] for path in paths]
 
-            if self.algo.positive_adv:
-                advantages = util.shift_advantages_to_positive(advantages)
+            advantages = tensor_utils.pad_tensor_n_collapsed(adv, int(self.algo.max_path_length))
 
             samples_data = dict(
                 advantages=advantages,
             )
         else:
+            assert(False)
             max_path_length = max([len(path["advantages"]) for path in paths])
 
 

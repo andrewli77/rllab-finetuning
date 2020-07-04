@@ -71,19 +71,44 @@ class BaseSampler(Sampler):
         )
 
         if not self.algo.policy.recurrent:
-            observations = tensor_utils.concat_tensor_list([path["observations"] for path in paths])
-            actions = tensor_utils.concat_tensor_list([path["actions"] for path in paths])
-            rewards = tensor_utils.concat_tensor_list([path["rewards"] for path in paths])
-            returns = tensor_utils.concat_tensor_list([path["returns"] for path in paths])
-            advantages = tensor_utils.concat_tensor_list([path["advantages"] for path in paths])
-            env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
-            agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+            max_len = int(self.algo.max_path_length)
+            observations = [path["observations"] for path in paths]
+            observations = tensor_utils.pad_tensor_n_collapsed(observations, max_len)
+
+
+            actions = [path["actions"] for path in paths]
+            actions = tensor_utils.pad_tensor_n_collapsed(actions, max_len)
+
+            rewards = [path["rewards"] for path in paths]
+            rewards = tensor_utils.pad_tensor_n_collapsed(rewards, max_len)
+
+            returns = [path["returns"] for path in paths]
+            returns = tensor_utils.pad_tensor_n_collapsed(returns, max_len)
 
             if self.algo.center_adv:
-                advantages = util.center_advantages(advantages)
+                raw_adv = np.concatenate([path["advantages"] for path in paths])
+                adv_mean = np.mean(raw_adv)
+                adv_std = np.std(raw_adv) + 1e-8
+                adv = [(path["advantages"] - adv_mean) / adv_std for path in paths]
+            else:
+                assert(False)
+                adv = [path["advantages"] for path in paths]
 
-            if self.algo.positive_adv:
-                advantages = util.shift_advantages_to_positive(advantages)
+            advantages = tensor_utils.pad_tensor_n_collapsed(adv, max_len)
+
+            # old_env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+            # old_agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+
+
+            agent_infos = [path["agent_infos"] for path in paths]
+            agent_infos = tensor_utils.concat_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_len) for p in agent_infos]
+            )
+
+            env_infos = [path["env_infos"] for path in paths]
+            env_infos = tensor_utils.concat_tensor_dict_list(
+                [tensor_utils.pad_tensor_dict(p, max_len) for p in env_infos]
+            )
 
             average_discounted_return = \
                 np.mean([path["returns"][0] for path in paths])
@@ -103,6 +128,7 @@ class BaseSampler(Sampler):
                 paths=paths,
             )
         else:
+            assert(False)
             max_path_length = max([len(path["advantages"]) for path in paths])
 
             # make all paths the same length (pad extra advantages with 0)
