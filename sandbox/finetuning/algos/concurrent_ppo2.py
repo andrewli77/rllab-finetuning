@@ -168,7 +168,6 @@ class Concurrent_PPO(BatchPolopt):
 
         # Updates params, and outputs the magnitude of the gradient. 
         if self.version == 1:
-            assert(False) # don't use this
             self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
             self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_init(obs_var_raw, action_var, latent_var, disc_rewards_var, obs_var_sparse, latent_var_sparse)
             
@@ -185,8 +184,9 @@ class Concurrent_PPO(BatchPolopt):
             self.updates_2 = lasagne.updates.adam(self.lo_hi_clipped, self.policy.low_policy.get_params(trainable=True), learning_rate=self.step_size_2)
 
 
-            self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, disc_rewards_var], updates = self.updates_1, outputs=[self.hi_lo_magnitude, self.hi_magnitude])
-            self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, disc_rewards_var],updates = self.updates_2, outputs=[self.lo_hi_magnitude, self.lo_magnitude])
+            self.train_fn_1 = theano.function([obs_var_raw, action_var, latent_var, obs_var_sparse, latent_var_sparse, advantage_var, advantage_var_sparse, disc_rewards_var], updates = self.updates_1, outputs=[self.hi_lo_magnitude, self.hi_magnitude])
+            self.train_fn_2 = theano.function([obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse, advantage_var_sparse, disc_rewards_var],updates = self.updates_2, outputs=[self.lo_hi_magnitude, self.lo_magnitude])
+        
         elif self.version == 2:
             self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_exp_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
             self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_exp_init(obs_var_raw, action_var, latent_var, advantage_var, obs_var_sparse, latent_var_sparse)
@@ -445,16 +445,6 @@ class Concurrent_PPO(BatchPolopt):
                             latents_sparse, mean, log_std, prob)
 
 
-        # disc_rewards = input_values[4]
-        # disc = 1. 
-        # for t in range(len(disc_rewards)):
-        #     disc_rewards[t] *= disc
-        #     disc *= 0.999
-
-        #     if t % 5000 == 0:
-        #         disc = 1.
-
-
         # todo: assign current parameters to old policy; does this work?
         # old_param_values = self.policy.get_param_values(trainable=True)
         # self.old_policy.set_param_values(old_param_values, trainable=True)
@@ -472,8 +462,20 @@ class Concurrent_PPO(BatchPolopt):
         if self.step_size_2 != 0:
 
             print("Initial:", self.optimizer.loss(all_input_values))
-            mag_hi_2, mag_hi = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var, advantage_sparse)
-            mag_lo_2, mag_lo = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse)
+            if self.version == 1:
+                disc_rewards = input_values[4]
+                disc = 1. 
+                for t in range(len(disc_rewards)):
+                    disc_rewards[t] *= disc
+                    disc *= 0.999
+
+                    if t % int(self.max_path_length) == 0:
+                        disc = 1.
+                mag_hi_2, mag_hi = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var, advantage_sparse, disc_rewards)
+                mag_lo_2, mag_lo = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse, disc_rewards)
+            else:
+                mag_hi_2, mag_hi = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var, advantage_sparse)
+                mag_lo_2, mag_lo = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse)
             print("After:", self.optimizer.loss(all_input_values))
 
             logger.record_tabular('Grad_hi_lo_Mag', mag_hi_2)
