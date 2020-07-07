@@ -438,6 +438,18 @@ class Concurrent_PPO(BatchPolopt):
             advantage_var = input_values[5]
         else:
             advantage_var = input_values[2]
+
+        # The original algorithm does not discount the advantages based on time, but this should be done. 
+        disc = 1.
+        for t in range(len(advantage_var)):
+            if t % int(self.max_path_length) == 0:
+                disc = 1.
+            advantage_var[t] *= disc
+            disc *= 0.999
+
+
+
+
         # import ipdb; ipdb.set_trace()
         if self.freeze_skills and not self.freeze_manager:
             all_input_values = (obs_sparse, advantage_sparse, latents_sparse, prob)
@@ -470,11 +482,12 @@ class Concurrent_PPO(BatchPolopt):
                 disc_rewards = input_values[4]
                 disc = 1. 
                 for t in range(len(disc_rewards)):
+                    if t % int(self.max_path_length) == 0:
+                        disc = 1.
                     disc_rewards[t] *= disc
                     disc *= 0.999
 
-                    if t % int(self.max_path_length) == 0:
-                        disc = 1.
+
                 mag_hi_2, mag_hi = self.train_fn_1(obs_raw, input_values[1], latents, obs_sparse, latents_sparse, advantage_var, advantage_sparse, disc_rewards)
                 mag_lo_2, mag_lo = self.train_fn_2(obs_raw, input_values[1], latents, advantage_var, obs_sparse, latents_sparse, advantage_sparse, disc_rewards)
             else:
