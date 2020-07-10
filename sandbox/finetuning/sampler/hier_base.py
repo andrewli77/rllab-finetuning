@@ -99,16 +99,16 @@ class BaseSampler(Sampler):
             # old_env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
             # old_agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
 
-
-            agent_infos = [path["agent_infos"] for path in paths]
-            agent_infos = tensor_utils.concat_tensor_dict_list(
-                [tensor_utils.pad_tensor_dict(p, max_len) for p in agent_infos]
-            )
-
-            env_infos = [path["env_infos"] for path in paths]
-            env_infos = tensor_utils.concat_tensor_dict_list(
-                [tensor_utils.pad_tensor_dict(p, max_len) for p in env_infos]
-            )
+            agent_infos = tensor_utils.concat_tensor_dict_list([path["agent_infos"] for path in paths])
+            # agent_infos = [path["agent_infos"] for path in paths]
+            # agent_infos = tensor_utils.concat_tensor_dict_list(
+            #     [tensor_utils.pad_tensor_dict(p, max_len) for p in agent_infos]
+            # )
+            env_infos = tensor_utils.concat_tensor_dict_list([path["env_infos"] for path in paths])
+            # env_infos = [path["env_infos"] for path in paths]
+            # env_infos = tensor_utils.concat_tensor_dict_list(
+            #     [tensor_utils.pad_tensor_dict(p, max_len) for p in env_infos]
+            # )
 
             average_discounted_return = \
                 np.mean([path["returns"][0] for path in paths])
