@@ -163,16 +163,44 @@ class Concurrent_PPO(BatchPolopt):
         # 3: unbiased advantage estimator
         print("VERSION: ", self.version)
 
-        self.first_order_grad_lo = self.first_order_grad_lo_init(obs_var_raw, action_var, latent_var, advantage_var)
-        self.first_order_grad_hi = self.first_order_grad_hi_init(obs_var_sparse, latent_var_sparse, advantage_var_sparse)
+        # Split batch into two independent sets 
+        batch_size = int(self.max_path_length) * 20 
+        batch_size_sparse = int(batch_size // self.period)
+
+        obs_var_raw_1 = obs_var_raw.take([i for i in range(batch_size_sparse // 2)], axis=0)
+        obs_var_raw_2 = obs_var_raw.take([i for i in range(batch_size_sparse // 2, batch_size_sparse)], axis=0)
+
+        action_var_1 = action_var.take([i for i in range(batch_size // 2)], axis=0)
+        action_var_2 = action_var.take([i for i in range(batch_size // 2, batch_size)], axis=0)
+
+        latent_var_1 = latent_var.take([i for i in range(batch_size // 2)], axis=0)
+        latent_var_2 = latent_var.take([i for i in range(batch_size // 2, batch_size)], axis=0)
+
+        advantage_var_1 = advantage_var.take([i for i in range(batch_size // 2)], axis=0)
+        advantage_var_2 = advantage_var.take([i for i in range(batch_size // 2, batch_size)], axis=0)
+
+        obs_var_sparse_1 = obs_var_sparse.take([i for i in range(batch_size_sparse // 2)], axis=0)
+        obs_var_sparse_2 = obs_var_sparse.take([i for i in range(batch_size_sparse // 2, batch_size_sparse)], axis=0)
+
+        latent_var_sparse_1 = latent_var_sparse.take([i for i in range(batch_size_sparse // 2)], axis=0)
+        latent_var_sparse_2 = latent_var_sparse.take([i for i in range(batch_size_sparse // 2, batch_size_sparse)], axis=0)
+
+        advantage_var_sparse_1 = advantage_var_sparse.take([i for i in range(batch_size_sparse // 2)], axis=0)
+        advantage_var_sparse_2 = advantage_var_sparse.take([i for i in range(batch_size_sparse // 2, batch_size_sparse)], axis=0)
+
+        rewards_var_1 = rewards_var.take([i for i in range(batch_size // 2)], axis=0)
+        rewards_var_2 = rewards_var.take([i for i in range(batch_size // 2, batch_size)], axis=0)
+
+        self.first_order_grad_lo = self.first_order_grad_lo_init(obs_var_raw_1, action_var_1, latent_var_1, advantage_var_1)
+        self.first_order_grad_hi = self.first_order_grad_hi_init(obs_var_sparse_1, latent_var_sparse_1, advantage_var_sparse_1)
 
         self.lo_magnitude = sum([x.norm(2) ** 2 for x in self.first_order_grad_lo]) ** 0.5 
         self.hi_magnitude = sum([x.norm(2) ** 2 for x in self.first_order_grad_hi]) ** 0.5
 
         # Updates params, and outputs the magnitude of the gradient. 
         if self.version == 1:
-            self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_init(obs_var_raw, action_var, latent_var, rewards_var, obs_var_sparse, latent_var_sparse)
-            self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_init(obs_var_raw, action_var, latent_var, rewards_var, obs_var_sparse, latent_var_sparse)
+            self.second_order_grad_hi_lo = self.second_order_grad_hi_lo_init(obs_var_raw_2, action_var_2, latent_var_2, rewards_var_2, obs_var_sparse_2, latent_var_sparse_2)
+            self.second_order_grad_lo_hi = self.second_order_grad_lo_hi_init(obs_var_raw_2, action_var_2, latent_var_2, rewards_var_2, obs_var_sparse_2, latent_var_sparse_2)
             
             self.hi_lo_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_hi_lo]) ** 0.5
             self.lo_hi_magnitude = sum([x.norm(2) ** 2 for x in self.second_order_grad_lo_hi]) ** 0.5
