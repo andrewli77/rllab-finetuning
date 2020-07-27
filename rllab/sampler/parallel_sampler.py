@@ -92,7 +92,7 @@ def _worker_set_env_params(G,params,scope=None):
 def _worker_collect_one_path(G, max_path_length, scope=None):
     G = _get_scoped_G(G, scope)
     path = rollout(G.env, G.policy, max_path_length)
-    return path #, len(path["rewards"])
+    return path, len(path["rewards"])
 
 
 def sample_paths(
@@ -118,16 +118,11 @@ def sample_paths(
             _worker_set_env_params,
             [(env_params, scope)] * singleton_pool.n_parallel
         )
-    # return singleton_pool.run_collect(
-    #     _worker_collect_one_path,
-    #     threshold=max_samples,
-    #     args=(max_path_length, scope),
-    #     show_prog_bar=True
-    # )
-
-    return singleton_pool.run_each(
+    return singleton_pool.run_collect(
         _worker_collect_one_path,
-        args_list=[(max_path_length, scope)] * singleton_pool.n_parallel
+        threshold=max_samples,
+        args=(max_path_length, scope),
+        show_prog_bar=True
     )
 
 def truncate_paths(paths, max_samples):

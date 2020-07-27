@@ -179,7 +179,6 @@ assert not (args.random_init and args.pretrained_manager)  # don't do weird and 
 
 pkl_path = None
 if len(args.pkl_path) > 0:
-    assert args.pretrained_manager
     assert not args.random_init
 
 npz_path = None
@@ -205,7 +204,7 @@ if args.env_name == 'cartpole':
     env = normalize(CartpoleEnv())
     snn_pkl_path = None
     manager_pkl_path = None
-    n_parallel = 1
+    n_parallel = 2
     latent_dim = 4
     batch_size = 4000
     max_path_length = 100
@@ -455,7 +454,7 @@ snapshot_gap = n_itr
 algo_lst = []
 policy_lst = []
 if args.batch_size != -1:
-    snapshot_gap = int((n_itr-1) * args.batch_size // batch_size)
+    snapshot_gap = 1
     batch_size = args.batch_size
     snapshot_mode = "gap"
     assert (n_itr - 1) % snapshot_gap == 0
